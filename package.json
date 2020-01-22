@@ -1,0 +1,24 @@
+{
+  "name": "pouchdbdemo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "sqlite_to_couchDb_transfer_node_script.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stefaneidelloth/pouchDbDemo.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/stefaneidelloth/pouchDbDemo/issues"
+  },
+  "homepage": "https://github.com/stefaneidelloth/pouchDbDemo#readme",
+  "dependencies": {
+    "pouchdb": "7.1.1",
+    "pouchdb-adapter-node-websql": "7.0.0",
+    "sqlite3": "^4.1.1"
+  }
+}

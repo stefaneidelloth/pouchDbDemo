@@ -1,0 +1,315 @@
+<html>
+
+	<head>
+
+		<title>dc demo</title>
+
+		<meta http-equiv='content-type' content='text/html; charset=UTF8'>
+	     
+
+		 <script src='https://d3js.org/d3.v4.min.js'></script>
+		 <script src='https://cdnjs.cloudflare.com/ajax/libs/crossfilter2/1.5.2/crossfilter.min.js'></script>
+		 <script src='https://cdnjs.cloudflare.com/ajax/libs/dc/3.1.8/dc.min.js'></script>
+		 <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/dc/3.1.8/dc.css" />
+
+		 <script src='https://cdn.jsdelivr.net/npm/pouchdb@7.1.1/dist/pouchdb.js'></script>
+		 <script src='https://cdn.jsdelivr.net/npm/pouchdb@7.1.1/dist/pouchdb.find.js'></script>
+
+
+
+	</head>
+	
+	<body>
+	    
+	    <div style="font-family:arial;">
+
+			 <div style="float:left;padding:20px;">
+				<div >
+					<label>Number of colors:</label>
+					<div id='color-chart-count'></div>
+				</div>
+
+				<div>
+					<label>Value sum for colors:</label>
+					<div id='color-chart-value-sum'></div>
+				</div>
+
+			</div>
+
+
+
+			<div style="float:center;padding:20px;">
+				<div>
+					<label>Number of ages:</label>
+					<div id='age-chart-count'></div>
+				</div>
+
+				<div>
+					<label>Value sum for ages:</label>
+					<div id='age-chart-value-sum'></div>
+				</div>
+
+			</div>
+
+	    </div>
+	    
+	    
+        <div style="font-family:arial;">
+            <label for='value-chart'>Values:</label>
+	        <div id='value-chart'></div>
+        </div>
+	    
+	
+		<script>
+
+            
+		    var clientDatabase = new PouchDB('visualization');
+    
+		    //var remoteDatabase = new PouchDB('http://localhost:5984/visualization'); //requires installation of CouchDB
+
+            			
+			let data = [			              
+
+						  {_id:'1', color: 'red', age: 1, value: 10},
+						  {_id:'2', color: 'red', age: 2, value: 11},
+						  {_id:'3', color: 'red', age: 3, value: 12},						  
+
+						  {_id:'4', color: 'green', age: 1, value: 20},
+						  {_id:'5', color: 'green', age: 2, value: 21},
+						  {_id:'6', color: 'green', age: 3, value: 22},
+
+						  {_id:'7', color: 'blue', age: 1, value: 30},
+						  {_id:'8', color: 'blue', age: 2, value: 31},
+						  {_id:'9', color: 'blue', age: 3, value: 32},
+						];
+
+			clientDatabase.bulkDocs(data)
+			              .catch(console.error);
+
+			//clientDatabase.get('1').then(console.log);
+
+			var cf = createCrossFilterAndCharts();			
+
+
+			let query = {
+            	selector: {color: 'red'}
+            };
+
+		    clientDatabase.find(query)
+						.then(result=>{
+							cf.add(result.docs);
+							dc.renderAll();									
+						});
+
+			function createCrossFilterAndCharts(){
+
+                //create instance of cross filter
+				var cf = crossfilter();			 
+
+				//define dimensions and groups
+				let colorDim = cf.dimension(d=> d.color);
+				let colorGroupCount = colorDim.group().reduceCount();
+				let colorGroupValueSum = colorDim.group().reduceSum(d => d.value);
+
+				let ageDim = cf.dimension(d=> d.age);
+				let ageGroupCount = ageDim.group().reduceCount();
+				let ageGroupValueSum = ageDim.group().reduceSum(d => d.value);
+
+				let colorAgeDim = cf.dimension(d => [d.color, d.age]);
+				
+
+				let colorAgeGroup = colorAgeDim.group().reduce(reduceAdd, reduceRemove, reduceInit);
+
+				let filteredColorAgeGroup = removeMissingEntries(colorAgeGroup);
+
+				let ordinalColors =  ['red','green','blue'];    
+			    let ordinalAgeColors =  ['lightgray','grey','#666666']; 	
+
+			    createColorCharts(colorDim, colorGroupCount, colorGroupValueSum, ordinalColors);
+				createAgeCharts(ageDim, ageGroupCount, ageGroupValueSum, ordinalAgeColors);
+				createValueChart(colorAgeDim, filteredColorAgeGroup); 
+				
+
+				return cf;
+
+
+
+				function reduceAdd(previous, current) {
+
+					if(current){
+						if(current.value !== null){
+							if(previous.sum === null){
+								previous.sum = current.value;
+								previous.count = 1;
+							} else {
+								previous.sum += current.value;
+								previous.count += 1;
+
+							}
+						} 
+					} 
+					return previous;            									
+				}
+
+				function reduceRemove(previous, current) {					
+					if(current){
+						if(current.value !== null){
+							if(previous.sum !== null){
+								previous.sum -= current.value;
+								previous.count -= 1;
+								if(previous.count === 0){
+									previous.sum = null;
+								}
+							} 
+						} 
+					} 
+					return previous; 				
+				}
+
+				function reduceInit(previous) {
+						return { 
+								sum: null,
+								count: 0
+							   };
+				}
+
+				function removeMissingEntries(sourceGroup) {
+					return {
+						all:function () {
+							return sourceGroup.all().filter(function(d) {							
+								return d.value.sum !== null; 
+							});
+						}
+					};
+				}	
+
+
+				
+
+			}      
+
+			
+
+			function createColorCharts(colorDim, colorGroupCount, colorGroupValueSum, ordinalColors){
+
+                let rgbColorScale = d3.scaleOrdinal().domain(ordinalColors).range(ordinalColors);
+
+				let colorChartCount = barChart('#color-chart-count')               
+					.xAxisLabel('Color')  				   				
+					.x(d3.scaleBand().domain(ordinalColors))		
+					.dimension(colorDim)		
+					.yAxisLabel('Count')					
+					.group(colorGroupCount)							
+					.defineColors(rgbColorScale);				
+
+				colorChartCount.yAxis().ticks(4);		
+
+
+				barChart('#color-chart-value-sum')               
+					.xAxisLabel('Color')  				         				
+					.x(d3.scaleBand().domain(ordinalColors))		
+					.dimension(colorDim)		
+					.yAxisLabel('Value sum')				
+					.group(colorGroupValueSum)
+					.defineColors(rgbColorScale);
+			}
+			
+			function createAgeCharts(ageDim, ageGroupCount, ageGroupValueSum, ordinalAgeColors){
+
+                let ageColorScale = d3.scaleOrdinal().domain([1,2,3]).range(ordinalAgeColors);
+			
+				let ageChartCount = barChart('#age-chart-count')              
+					.xAxisLabel('Age') 				           				
+					.x(d3.scaleLinear().domain([1,2,3]))		
+					.dimension(ageDim)		
+					.yAxisLabel('Count')				
+					.group(ageGroupCount)			
+					.defineColors(ageColorScale);
+
+				ageChartCount.yAxis().ticks(4);	
+
+				barChart('#age-chart-value-sum')               
+					.xAxisLabel('Age')  				   				
+					.x(d3.scaleLinear().domain([1,2,3]))	
+					.dimension(ageDim)		
+					.yAxisLabel('Value sum')				
+					.group(ageGroupValueSum)
+					.defineColors(ageColorScale);
+			}
+
+			function barChart(elementSelector){
+
+				let barChart = dc.barChart(elementSelector)
+					.width(200)
+					.height(200)				
+					.xUnits(dc.units.ordinal)  			
+					.margins({top:10,left:30,right:15,bottom:35})	
+					.barPadding(0.1)
+					.outerPadding(0.1)					
+					.transitionDuration(500);
+
+					barChart.defineColors = function(colorScale){
+
+						this.renderlet(chart=>{
+							chart.selectAll('rect.bar')
+								 .each(function(d){
+
+									let isSelected = this.classList.contains('selected');
+									if(isSelected){
+										d3.select(this).attr('style', 'fill: ' + colorScale(d.x) + ';stroke-width:2;stroke:#39ff14');
+
+									} else {
+										d3.select(this).attr('style', 'fill: ' + colorScale(d.x));
+									}
+
+
+								 });
+
+						});
+						return this;
+					}
+
+					return barChart;
+			}
+			
+			function createValueChart(colorAgeDim, colorAgeGroup){
+                let chart = dc.seriesChart('#value-chart');
+
+				 chart
+					.width(500)
+					.height(500)
+					.chart( c => 
+						   dc.lineChart(c)
+						   .renderDataPoints(true)
+
+
+					)				
+					.xAxisLabel('Age')
+					.x(d3.scaleLinear().domain([1,3]))
+					.dimension(colorAgeDim)				
+					.yAxisLabel('Value')
+					.elasticY(true)
+					.group(colorAgeGroup)					
+					.brushOn(false)	
+					.clipPadding(10)
+					.mouseZoomable(true)
+					.seriesAccessor(d => d.key[0])
+					.keyAccessor(d => d.key[1])
+					.valueAccessor(d => {
+						return d.value.sum;
+					})
+					.ordinalColors(['blue','green','red','yellow'])
+					.legend(dc.legend().x(430).y(350)); 
+
+			}
+
+
+            
+
+
+		</script>
+	
+	
+	</body>
+
+</html>
