@@ -62,13 +62,12 @@
 	
 		<script>
 
-            
+             var remoteDatabase = new PouchDB('http://localhost:5984/visualization'); //requires installation of CouchDB
 		    var clientDatabase = new PouchDB('visualization');
-    
-		    //var remoteDatabase = new PouchDB('http://localhost:5984/visualization'); //requires installation of CouchDB
 
-            			
-			let data = [			              
+		    
+
+		    let data = [			              
 
 						  {_id:'1', color: 'red', age: 1, value: 10},
 						  {_id:'2', color: 'red', age: 2, value: 11},
@@ -80,26 +79,66 @@
 
 						  {_id:'7', color: 'blue', age: 1, value: 30},
 						  {_id:'8', color: 'blue', age: 2, value: 31},
-						  {_id:'9', color: 'blue', age: 3, value: 32},
+						  {_id:'9', color: 'blue', age: 3, value: 32}
 						];
 
+			
+
 			clientDatabase.bulkDocs(data)
-			              .catch(console.error);
+			              .then((result, error) => {
+
+                            
+                            remoteDatabase.bulkDocs(data)
+                              .then((result, error) =>{
+
+                              	  addDataToCrossFilter();
+                              });
+                            
+                            /*
+
+			              	clientDatabase.replicate.to(remoteDatabase)
+			              	.then((result, error) =>{
+                              	  addDataToCrossFilter();
+                              });
+                              */
+						});
+							
+
+			
+    
+		   
+            
+            			
+			
 
 			//clientDatabase.get('1').then(console.log);
 
 			var cf = createCrossFilterAndCharts();			
 
-
+            /*
 			let query = {
             	selector: {color: 'red'}
             };
 
-		    clientDatabase.find(query)
+		    database.find(query)
 						.then(result=>{
 							cf.add(result.docs);
 							dc.renderAll();									
 						});
+			*/
+
+            function addDataToCrossFilter(){
+                remoteDatabase.allDocs({include_docs: true})
+					.then(result=>{
+						for(var row of result.rows){
+							cf.add([row.doc]);
+						}
+						
+						dc.renderAll();	
+					});
+            }
+
+			
 
 			function createCrossFilterAndCharts(){
 
